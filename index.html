@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Eternal Trinity - Isometric Squad MMORPG</title>
+  <style>
+    * { box-sizing: border-box; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0c0f17; font-family: 'Segoe UI', Tahoma, sans-serif; color: #f0e6d2; }
+    #game-container { width: 100%; height: 100%; position: relative; }
+    canvas { display: block; width: 100%; height: 100%; }
+
+    #hud { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 10px; }
+    .hud-row { display: flex; justify-content: space-between; align-items: flex-start; width: 100%; }
+    .panel { background: rgba(15, 20, 30, 0.82); border: 1px solid #5c4b37; border-radius: 8px; padding: 6px 10px; pointer-events: auto; backdrop-filter: blur(4px); }
+
+    #squad-panel { display: flex; gap: 8px; }
+    .char-card { width: 118px; padding: 6px; border-radius: 6px; background: rgba(25, 32, 48, 0.9); border: 2px solid #3d485c; cursor: pointer; transition: 0.15s; }
+    .char-card.leader { border-color: #f5c542; box-shadow: 0 0 10px rgba(245, 197, 66, 0.45); }
+    .char-card.dead { opacity: 0.45; filter: grayscale(1); }
+    .char-header { display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; margin-bottom: 4px; }
+    .char-role { font-size: 10px; color: #9ab; }
+    .bar-bg { width: 100%; height: 7px; background: #1a1f29; border-radius: 3px; overflow: hidden; margin-top: 3px; }
+    .hp-fill { height: 100%; background: linear-gradient(90deg, #d93838, #ff6b6b); width: 100%; transition: width 0.15s; }
+    .mp-fill { height: 100%; background: linear-gradient(90deg, #2b6cb0, #63b3ed); width: 100%; transition: width 0.15s; }
+    .char-state { font-size: 10px; color: #cbd5e0; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    #top-right { display: flex; gap: 8px; align-items: flex-start; }
+    #quest-box { font-size: 11px; max-width: 195px; line-height: 1.35; }
+    #quest-title { color: #f5c542; font-weight: bold; margin-bottom: 2px; }
+    #minimap-box { width: 110px; height: 84px; position: relative; overflow: hidden; padding: 0; border: 2px solid #6b563e; }
+    #minimap-canvas { width: 100%; height: 100%; display: block; }
+    #zone-banner { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: rgba(15,20,30,0.85); border: 1px solid #8a704c; padding: 4px 14px; border-radius: 16px; font-size: 12px; font-weight: bold; color: #f5c542; pointer-events: none; }
+
+    #bottom-row { display: flex; justify-content: space-between; align-items: flex-end; width: 100%; }
+    #joystick-zone { width: 130px; height: 130px; position: relative; pointer-events: auto; touch-action: none; }
+    #joystick-base { width: 104px; height: 104px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 2px solid rgba(245,197,66,0.4); position: absolute; bottom: 10px; left: 10px; }
+    #joystick-knob { width: 44px; height: 44px; border-radius: 50%; background: radial-gradient(circle, #f5c542, #b8860b); position: absolute; top: 30px; left: 30px; pointer-events: none; }
+
+    #tactical-bar { display: flex; flex-direction: column; gap: 5px; align-items: center; }
+    .btn-group { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; }
+    .hud-btn { background: #1e2638; color: #e2e8f0; border: 1px solid #4a5568; border-radius: 6px; padding: 6px 9px; font-size: 11px; font-weight: bold; cursor: pointer; pointer-events: auto; }
+    .hud-btn.active { background: #b7791f; border-color: #f6e05e; color: #fff; }
+    .hud-btn:active { transform: scale(0.95); }
+
+    #action-pad { display: flex; align-items: flex-end; gap: 8px; pointer-events: auto; }
+    .skill-grid { display: flex; gap: 6px; align-items: flex-end; }
+    .skill-btn { width: 52px; height: 52px; border-radius: 50%; background: #1f293d; border: 2px solid #63b3ed; color: #fff; font-size: 10px; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; position: relative; }
+    .skill-btn.attack-btn { width: 66px; height: 66px; background: #742a2a; border-color: #fc8181; font-size: 12px; }
+    .skill-cd { position: absolute; inset: 0; border-radius: 50%; background: rgba(0,0,0,0.72); display: none; align-items: center; justify-content: center; font-size: 13px; color: #fbd38d; }
+
+    #modal-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 330px; display: none; z-index: 20; }
+    #modal-overlay h3 { font-size: 14px; color: #f5c542; margin-bottom: 6px; display: flex; justify-content: space-between; }
+    #inv-list { font-size: 12px; line-height: 1.6; max-height: 190px; overflow-y: auto; }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div id="zone-banner">🏰 Havenfall Town (Safe Zone)</div>
+    <div id="hud">
+      <div class="hud-row">
+        <div id="squad-panel"></div>
+        <div id="top-right">
+          <div id="quest-box" class="panel">
+            <div id="quest-title">Quest: Plains Patrol</div>
+            <div id="quest-desc">Hunt Slimes & Wolves: <span id="quest-prog">0/8</span></div>
+            <div style="margin-top:4px;font-size:10px;color:#fbd38d;">Gold: <span id="gold-val">100</span> | Potions: <span id="pot-val">5</span></div>
+            <div style="margin-top:2px;font-size:10px;color:#9ae6b4;" id="net-status">Mode: Offline / Local</div>
+          </div>
+          <div id="minimap-box" class="panel">
+            <canvas id="minimap-canvas" width="110" height="84"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div id="bottom-row">
+        <div id="joystick-zone">
+          <div id="joystick-base"><div id="joystick-knob"></div></div>
+        </div>
+
+        <div id="tactical-bar" class="panel">
+          <div class="btn-group" id="mode-group">
+            <button class="hud-btn active" data-mode="MANUAL">Manual</button>
+            <button class="hud-btn" data-mode="AUTO_ATTACK">Auto Atk</button>
+            <button class="hud-btn" data-mode="FULL_AUTO">Full Auto</button>
+            <button class="hud-btn" data-mode="HOLD">Hold Pos</button>
+          </div>
+          <div class="btn-group" id="form-group">
+            <button class="hud-btn active" data-form="TRIANGLE">▲ Triangle</button>
+            <button class="hud-btn" data-form="LINE">━ Line</button>
+            <button class="hud-btn" data-form="SPREAD">❖ Spread</button>
+            <button class="hud-btn" id="btn-potion">🧪 Potion</button>
+            <button class="hud-btn" id="btn-inv">🎒 Bag</button>
+            <button class="hud-btn" id="btn-portal">🌀 Portal</button>
+          </div>
+        </div>
+
+        <div id="action-pad">
+          <div class="skill-grid">
+            <button class="skill-btn" id="btn-skill-0"><span id="sk-name-0">Taunt</span><div class="skill-cd" id="sk-cd-0"></div></button>
+            <button class="skill-btn" id="btn-skill-1"><span id="sk-name-1">Nova</span><div class="skill-cd" id="sk-cd-1"></div></button>
+            <button class="skill-btn" id="btn-skill-2"><span id="sk-name-2">CritShot</span><div class="skill-cd" id="sk-cd-2"></div></button>
+            <button class="skill-btn attack-btn" id="btn-attack">⚔️<br/>ATK</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="modal-overlay" class="panel">
+      <h3><span>Squad Inventory & Status</span><button class="hud-btn" id="btn-close-modal" style="padding:2px 6px;">✕</button></h3>
+      <div id="inv-list"></div>
+    </div>
+  </div>
+  <script type="module" src="/client/src/main.ts"></script>
+</body>
+</html>
