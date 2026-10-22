@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Eternal Trinity - Isometric Squad MMORPG (Standalone)</title>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+  <style>
+    * { box-sizing: border-box; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0c0f17; font-family: 'Segoe UI', Tahoma, sans-serif; color: #f0e6d2; }
+    #game-container { width: 100%; height: 100%; position: relative; }
+    canvas { display: block; width: 100%; height: 100%; }
+
+    #hud { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 8px; }
+    .hud-row { display: flex; justify-content: space-between; align-items: flex-start; width: 100%; gap: 6px; }
+    .panel { background: rgba(15, 20, 30, 0.85); border: 1px solid #5c4b37; border-radius: 8px; padding: 6px 8px; pointer-events: auto; backdrop-filter: blur(4px); }
+
+    #squad-panel { display: flex; gap: 6px; flex-wrap: wrap; }
+    .char-card { width: 104px; padding: 5px; border-radius: 6px; background: rgba(25, 32, 48, 0.92); border: 2px solid #3d485c; cursor: pointer; transition: 0.15s; }
+    .char-card.leader { border-color: #f5c542; box-shadow: 0 0 10px rgba(245, 197, 66, 0.45); }
+    .char-card.dead { opacity: 0.45; filter: grayscale(1); }
+    .char-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: bold; margin-bottom: 3px; }
+    .char-role { font-size: 9px; color: #9ab; }
+    .bar-bg { width: 100%; height: 6px; background: #1a1f29; border-radius: 3px; overflow: hidden; margin-top: 3px; }
+    .hp-fill { height: 100%; background: linear-gradient(90deg, #d93838, #ff6b6b); width: 100%; transition: width 0.15s; }
+    .mp-fill { height: 100%; background: linear-gradient(90deg, #2b6cb0, #63b3ed); width: 100%; transition: width 0.15s; }
+    .char-state { font-size: 9px; color: #cbd5e0; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    #top-right { display: flex; gap: 6px; align-items: flex-start; }
+    #quest-box { font-size: 10px; max-width: 170px; line-height: 1.35; }
+    #quest-title { color: #f5c542; font-weight: bold; margin-bottom: 2px; }
+    #minimap-box { width: 96px; height: 74px; position: relative; overflow: hidden; padding: 0; border: 2px solid #6b563e; }
+    #minimap-canvas { width: 100%; height: 100%; display: block; }
+    #zone-banner { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: rgba(15,20,30,0.85); border: 1px solid #8a704c; padding: 3px 12px; border-radius: 16px; font-size: 11px; font-weight: bold; color: #f5c542; pointer-events: none; z-index: 5; }
+
+    #bottom-row { display: flex; justify-content: space-between; align-items: flex-end; width: 100%; gap: 6px; }
+    #joystick-zone { width: 120px; height: 120px; position: relative; pointer-events: auto; touch-action: none; flex-shrink: 0; }
+    #joystick-base { width: 96px; height: 96px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 2px solid rgba(245,197,66,0.45); position: absolute; bottom: 8px; left: 8px; }
+    #joystick-knob { width: 40px; height: 40px; border-radius: 50%; background: radial-gradient(circle, #f5c542, #b8860b); position: absolute; top: 28px; left: 28px; pointer-events: none; }
+
+    #tactical-bar { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+    .btn-group { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
+    .hud-btn { background: #1e2638; color: #e2e8f0; border: 1px solid #4a5568; border-radius: 6px; padding: 5px 7px; font-size: 10px; font-weight: bold; cursor: pointer; pointer-events: auto; }
+    .hud-btn.active { background: #b7791f; border-color: #f6e05e; color: #fff; }
+
+    #action-pad { display: flex; align-items: flex-end; gap: 6px; pointer-events: auto; flex-shrink: 0; }
+    .skill-grid { display: flex; gap: 5px; align-items: flex-end; }
+    .skill-btn { width: 46px; height: 46px; border-radius: 50%; background: #1f293d; border: 2px solid #63b3ed; color: #fff; font-size: 9px; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; position: relative; }
+    .skill-btn.attack-btn { width: 58px; height: 58px; background: #742a2a; border-color: #fc8181; font-size: 11px; }
+    .skill-cd { position: absolute; inset: 0; border-radius: 50%; background: rgba(0,0,0,0.72); display: none; align-items: center; justify-content: center; font-size: 12px; color: #fbd38d; }
+
+    #modal-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 310px; display: none; z-index: 20; }
+    #modal-overlay h3 { font-size: 13px; color: #f5c542; margin-bottom: 6px; display: flex; justify-content: space-between; }
+    #inv-list { font-size: 11px; line-height: 1.5; max-height: 180px; overflow-y: auto; }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div id="zone-banner">🏰 Havenfall Town (Safe Zone)</div>
+    <div id="hud">
+      <div class="hud-row">
+        <div id="squad-panel"></div>
+        <div id="top-right">
+          <div id="quest-box" class="panel">
+            <div id="quest-title">Quest: Plains Patrol</div>
+            <div id="quest-desc">Hunt Slimes & Wolves: <span id="quest-prog">0/8</span></div>
+            <div style="margin-top:3px;font-size:10px;color:#fbd38d;">Gold: <span id="gold-val">100</span> | Potions: <span id="pot-val">5</span></div>
+          </div>
+          <div id="minimap-box" class="panel">
+            <canvas id="minimap-canvas" width="96" height="74"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div id="bottom-row">
+        <div id="joystick-zone">
+          <div id="joystick-base"><div id="joystick-knob"></div></div>
+        </div>
+
+        <div id="tactical-bar" class="panel">
+          <div class="btn-group" id="mode-group">
+            <button class="hud-btn active" data-mode="MANUAL">Manual</button>
+            <button class="hud-btn" data-mode="AUTO_ATTACK">Auto Atk</button>
+            <button class="hud-btn" data-mode="FULL_AUTO">Full Auto</button>
+            <button class="hud-btn" data-mode="HOLD">Hold</button>
+          </div>
+          <div class="btn-group" id="form-group">
+            <button class="hud-btn active" data-form="TRIANGLE">▲ Tri</button>
+            <button class="hud-btn" data-form="LINE">━ Line</button>
+            <button class="hud-btn" data-form="SPREAD">❖ Spread</button>
+            <button class="hud-btn" id="btn-potion">🧪 Pot</button>
+            <button class="hud-btn" id="btn-inv">🎒 Bag</button>
+            <button class="hud-btn" id="btn-portal">🌀 Portal</button>
+          </div>
+        </div>
+
+        <div id="action-pad">
+          <div class="skill-grid">
+            <button class="skill-btn" id="btn-skill-0"><span>Taunt</span><div class="skill-cd" id="sk-cd-0"></div></button>
+            <button class="skill-btn" id="btn-skill-1"><span>Nova</span><div class="skill-cd" id="sk-cd-1"></div></button>
+            <button class="skill-btn" id="btn-skill-2"><span>Crit</span><div class="skill-cd" id="sk-cd-2"></div></button>
+            <button class="skill-btn attack-btn" id="btn-attack">⚔️<br/>ATK</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="modal-overlay" class="panel">
+      <h3><span>Squad Inventory & Status</span><button class="hud-btn" id="btn-close-modal" style="padding:2px 6px;">✕</button></h3>
+      <div id="inv-list"></div>
+    </div>
+  </div>
+
+  <script>
+    const TILE_WIDTH = 64, TILE_HEIGHT = 32;
+    const worldToIso = (wx, wy) => ({ x: (wx - wy) * (TILE_WIDTH / 2), y: (wx + wy) * (TILE_HEIGHT / 2) });
+    const isoToWorld = (sx, sy) => ({ x: (sx / 32 + sy / 16) / 2, y: (sy / 16 - sx / 32) / 2 });
+    const distWorld = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+    const STARTING_SQUAD = [
+      { id: 'kael', name: 'Kael', role: 'GUARDIAN', color: 0x3b82f6, maxHp: 420, maxMp: 100, atk: 26, def: 16, attackRange: 1.55, attackSpeedMs: 1050, moveSpeed: 3.1, skillMpCost: 20, skillCooldownMs: 6000 },
+      { id: 'lyra', name: 'Lyra', role: 'ARCANIST', color: 0xa855f7, maxHp: 230, maxMp: 220, atk: 38, def: 7, attackRange: 4.3, attackSpeedMs: 1350, moveSpeed: 2.9, skillMpCost: 35, skillCooldownMs: 7000 },
+      { id: 'riven', name: 'Riven', role: 'RANGER', color: 0x22c55e, maxHp: 260, maxMp: 130, atk: 33, def: 9, attackRange: 5.0, attackSpeedMs: 800, moveSpeed: 3.35, skillMpCost: 25, skillCooldownMs: 5500 }
+    ];
+
+    function getFormationOffsets(formation, heading) {
+      const len = Math.hypot(heading.x, heading.y) || 1;
+      const fx = heading.x / len, fy = heading.y / len;
+      const rx = -fy, ry = fx;
+      if (formation === 'LINE') return [{ x: 0, y: 0 }, { x: rx * 1.25, y: ry * 1.25 }, { x: -rx * 1.25, y: -ry * 1.25 }];
+      if (formation === 'SPREAD') return [{ x: fx * 0.6, y: fy * 0.6 }, { x: -fx * 1.35 + rx * 1.6, y: -fy * 1.35 + ry * 1.6 }, { x: -fx * 1.35 - rx * 1.6, y: -fy * 1.35 - ry * 1.6 }];
+      return [{ x: 0, y: 0 }, { x: -fx * 1.25 + rx * 1.05, y: -fy * 1.25 + ry * 1.05 }, { x: -fx * 1.25 - rx * 1.05, y: -fy * 1.25 - ry * 1.05 }];
+    }
+
+    class MainScene extends Phaser.Scene {
+      constructor() {
+        super('MainScene');
+        this.mapSize = 36;
+        this.obstacles = new Set();
+        this.squad = [];
+        this.enemies = [];
+        this.loots = [];
+        this.leaderIndex = 0;
+        this.combatMode = 'MANUAL';
+        this.formation = 'TRIANGLE';
+        this.squadHeading = { x: 1, y: 1 };
+        this.moveTarget = null;
+        this.autoAnchor = { x: 20, y: 20 };
+        this.joystickVec = { x: 0, y: 0 };
+        this.gold = 100;
+        this.potions = 5;
+        this.kills = 0;
+        this.inventory = ['Rusty Broadsword (Kael)', 'Apprentice Staff (Lyra)', 'Oak Shortbow (Riven)'];
+      }
+
+      preload() {
+        const g = this.make.graphics({ x: 0, y: 0 });
+        const makeIsoTile = (key, fill, border, detail) => {
+          g.clear(); g.fillStyle(fill, 1); g.lineStyle(1, border, 0.65);
+          g.beginPath(); g.moveTo(32, 0); g.lineTo(64, 16); g.lineTo(32, 32); g.lineTo(0, 16); g.closePath();
+          g.fillPath(); g.strokePath();
+          if (detail) { g.fillStyle(detail, 0.5); g.fillRect(28, 13, 4, 2); g.fillRect(35, 17, 3, 2); }
+          g.generateTexture(key, TILE_WIDTH, TILE_HEIGHT);
+        };
+        makeIsoTile('tile_town', 0x6c757d, 0x495057, 0xadb5bd);
+        makeIsoTile('tile_grass', 0x2d6a4f, 0x1b4332, 0x40916c);
+        makeIsoTile('tile_road', 0x9c6644, 0x7f5539, 0xb08968);
+        makeIsoTile('tile_portal', 0x3a0ca3, 0x7209b7, 0x4cc9f0);
+
+        g.clear(); g.fillStyle(0x5c3a21, 1); g.fillRect(20, 36, 8, 20);
+        g.fillStyle(0x1e5631, 1); g.fillCircle(24, 24, 18); g.fillStyle(0x2d8a4e, 1); g.fillCircle(20, 20, 12);
+        g.generateTexture('prop_tree', 48, 60);
+
+        g.clear(); g.fillStyle(0x5a626a, 1); g.fillRoundedRect(6, 10, 32, 22, 6);
+        g.fillStyle(0x88929b, 1); g.fillRoundedRect(10, 12, 20, 12, 4);
+        g.generateTexture('prop_rock', 44, 34);
+
+        const makeCharTex = (key, armorColor, accentColor) => {
+          g.clear(); g.fillStyle(0x222733, 1); g.fillRect(10, 36, 5, 10); g.fillRect(17, 36, 5, 10);
+          g.fillStyle(armorColor, 1); g.fillRect(8, 18, 16, 19);
+          g.fillStyle(accentColor, 1); g.fillRect(7, 18, 18, 4);
+          g.fillStyle(0xf3d2b3, 1); g.fillRect(10, 7, 12, 11);
+          g.fillStyle(accentColor, 1); g.fillRect(9, 5, 14, 5);
+          g.fillStyle(0x111111, 1); g.fillRect(12, 11, 2, 2); g.fillRect(18, 11, 2, 2);
+          g.generateTexture(key, 32, 48);
+        };
+        makeCharTex('char_kael', 0x2563eb, 0xfbbf24);
+        makeCharTex('char_lyra', 0x7e22ce, 0x38bdf8);
+        makeCharTex('char_riven', 0x15803d, 0xa3e635);
+        makeCharTex('npc_captain', 0xb45309, 0xfde047);
+
+        g.clear(); g.fillStyle(0x06b6d4, 0.9); g.fillRoundedRect(4, 10, 24, 18, 8);
+        g.fillStyle(0xffffff, 1); g.fillRect(9, 15, 3, 3); g.fillRect(19, 15, 3, 3);
+        g.generateTexture('enemy_slime', 32, 30);
+
+        g.clear(); g.fillStyle(0x78350f, 1); g.fillRoundedRect(4, 12, 28, 16, 4);
+        g.fillStyle(0x92400e, 1); g.fillRect(22, 6, 10, 10); g.fillStyle(0xef4444, 1); g.fillRect(28, 9, 2, 2);
+        g.generateTexture('enemy_wolf', 36, 32);
+        g.destroy();
+      }
+
+      create() {
+        for (let wx = 0; wx < this.mapSize; wx++) {
+          for (let wy = 0; wy < this.mapSize; wy++) {
+            const iso = worldToIso(wx, wy);
+            const isTown = wx < 13 && wy < 13;
+            const isPortal = (wx === 12 && wy === 12) || (wx === 15 && wy === 15);
+            const isRoad = Math.abs(wx - wy) <= 1 && wx < 22;
+            let tex = isTown ? 'tile_town' : 'tile_grass';
+            if (isRoad) tex = 'tile_road';
+            if (isPortal) tex = 'tile_portal';
+            this.add.image(iso.x, iso.y, tex).setDepth(iso.y - 1000);
+            if (!isTown && !isRoad && !isPortal) {
+              const hash = (wx * 73 + wy * 37) % 97;
+              if (hash === 0 || hash === 11) {
+                this.obstacles.add(`${wx},${wy}`);
+                this.add.image(iso.x, iso.y - 18, 'prop_tree').setDepth(iso.y);
+              } else if (hash === 23) {
+                this.obstacles.add(`${wx},${wy}`);
+                this.add.image(iso.x, iso.y - 6, 'prop_rock').setDepth(iso.y);
+              }
+            }
+          }
+        }
+        const npcIso = worldToIso(5, 5);
+        this.add.image(npcIso.x, npcIso.y - 14, 'npc_captain').setDepth(npcIso.y);
+        this.add.text(npcIso.x, npcIso.y - 44, 'Commander Vane', { fontSize: '10px', color: '#fde047', backgroundColor: '#000' }).setOrigin(0.5).setDepth(npcIso.y + 1);
+        const pIso = worldToIso(12, 12);
+        this.add.text(pIso.x, pIso.y - 24, '🌀 Portal', { fontSize: '11px', color: '#67e8f9', backgroundColor: '#000' }).setOrigin(0.5).setDepth(pIso.y + 10);
+
+        const startCoords = [{ x: 7, y: 7 }, { x: 6, y: 8 }, { x: 8, y: 6 }];
+        STARTING_SQUAD.forEach((cfg, idx) => {
+          const pos = startCoords[idx], iso = worldToIso(pos.x, pos.y);
+          const shadow = this.add.ellipse(0, 4, 24, 12, 0x000000, 0.45);
+          const leaderRing = this.add.ellipse(0, 4, 32, 16).setStrokeStyle(2, 0xf5c542, 1).setVisible(idx === 0);
+          const bodySprite = this.add.sprite(0, -14, `char_${cfg.id}`);
+          const hpBg = this.add.rectangle(0, -44, 30, 5, 0x111827);
+          const hpBarFill = this.add.rectangle(-15, -44, 30, 5, 0x22c55e).setOrigin(0, 0.5);
+          const nameTag = this.add.text(0, -54, cfg.name, { fontSize: '10px', color: '#f8fafc' }).setOrigin(0.5);
+          const container = this.add.container(iso.x, iso.y, [shadow, leaderRing, bodySprite, hpBg, hpBarFill, nameTag]).setDepth(iso.y);
+          this.squad.push({ cfg, index: idx, wx: pos.x, wy: pos.y, hp: cfg.maxHp, mp: cfg.maxMp, maxHp: cfg.maxHp, maxMp: cfg.maxMp, atk: cfg.atk, def: cfg.def, level: 1, xp: 0, animState: 'IDLE', aiState: 'IDLE', targetEnemyId: null, lastAttackTime: 0, skillReadyAt: 0, tauntUntil: 0, container, bodySprite, hpBarFill, leaderRing });
+        });
+        this.cameras.main.startFollow(this.squad[0].container, true, 0.1, 0.1);
+
+        const spots = [
+          { x: 16, y: 15, kind: 'SLIME' }, { x: 18, y: 17, kind: 'SLIME' }, { x: 15, y: 19, kind: 'SLIME' },
+          { x: 20, y: 16, kind: 'SLIME' }, { x: 21, y: 21, kind: 'WOLF' }, { x: 23, y: 19, kind: 'WOLF' },
+          { x: 19, y: 24, kind: 'WOLF' }, { x: 25, y: 23, kind: 'WOLF' }
+        ];
+        spots.forEach((sp, i) => {
+          const isWolf = sp.kind === 'WOLF', iso = worldToIso(sp.x, sp.y), maxHp = isWolf ? 150 : 95;
+          const shadow = this.add.ellipse(0, 4, 24, 11, 0x000000, 0.4);
+          const bodySprite = this.add.sprite(0, -10, isWolf ? 'enemy_wolf' : 'enemy_slime');
+          const hpBg = this.add.rectangle(0, -30, 28, 4, 0x111827);
+          const hpBarFill = this.add.rectangle(-14, -30, 28, 4, 0xef4444).setOrigin(0, 0.5);
+          const nameTag = this.add.text(0, -39, isWolf ? 'Plains Wolf' : 'Mana Slime', { fontSize: '9px', color: '#fca5a5' }).setOrigin(0.5);
+          const container = this.add.container(iso.x, iso.y, [shadow, bodySprite, hpBg, hpBarFill, nameTag]).setDepth(iso.y);
+          this.enemies.push({ id: `enemy_${i}`, kind: sp.kind, wx: sp.x, wy: sp.y, spawnX: sp.x, spawnY: sp.y, hp: maxHp, maxHp, atk: isWolf ? 22 : 14, def: isWolf ? 6 : 3, range: 1.45, speed: isWolf ? 2.45 : 1.85, xpReward: isWolf ? 45 : 28, goldReward: isWolf ? 18 : 10, targetMemberIndex: null, lastAttackTime: 0, deadUntil: null, container, bodySprite, hpBarFill });
+        });
+
+        this.targetMarker = this.add.ellipse(0, 0, 34, 18).setStrokeStyle(2, 0xf5c542, 0.9).setVisible(false);
+        this.setupHUD();
+      }
+
+      setupHUD() {
+        const squadPanel = document.getElementById('squad-panel');
+        squadPanel.innerHTML = this.squad.map((m, idx) => `
+          <div class="char-card ${idx === 0 ? 'leader' : ''}" id="card-${idx}" data-idx="${idx}">
+            <div class="char-header"><span>${m.cfg.name} <small id="lvl-${idx}">Lv1</small></span><span class="char-role">${m.cfg.role.slice(0,4)}</span></div>
+            <div class="bar-bg"><div class="hp-fill" id="hp-bar-${idx}"></div></div>
+            <div class="bar-bg"><div class="mp-fill" id="mp-bar-${idx}"></div></div>
+            <div class="char-state" id="state-${idx}">IDLE</div>
+          </div>`).join('');
+        squadPanel.querySelectorAll('.char-card').forEach(el => el.addEventListener('pointerdown', ev => {
+          ev.stopPropagation();
+          const idx = Number(el.dataset.idx);
+          if (this.squad[idx].animState === 'DEAD') return;
+          this.leaderIndex = idx;
+          this.squad.forEach((m, i) => {
+            m.leaderRing.setVisible(i === idx);
+            document.getElementById(`card-${i}`).classList.toggle('leader', i === idx);
+          });
+          this.cameras.main.startFollow(this.squad[idx].container, true, 0.1, 0.1);
+        }));
+
+        this.input.on('pointerdown', pointer => {
+          const worldPt = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+          const wCoord = isoToWorld(worldPt.x, worldPt.y);
+          const cx = Phaser.Math.Clamp(wCoord.x, 1, this.mapSize - 2);
+          const cy = Phaser.Math.Clamp(wCoord.y, 1, this.mapSize - 2);
+          const clickedEnemy = this.enemies.find(e => e.deadUntil === null && distWorld({ x: e.wx, y: e.wy }, { x: cx, y: cy }) < 1.25);
+          if (clickedEnemy) {
+            this.squad.forEach(m => m.targetEnemyId = clickedEnemy.id);
+            this.spawnFloatingText(clickedEnemy.wx, clickedEnemy.wy, 'TARGET!', '#f5c542');
+          } else {
+            this.moveTarget = { x: cx, y: cy };
+            const iso = worldToIso(cx, cy);
+            this.targetMarker.setPosition(iso.x, iso.y).setVisible(true);
+          }
+        });
+
+        const joyZone = document.getElementById('joystick-zone'), joyKnob = document.getElementById('joystick-knob');
+        let joyActive = false;
+        const updateJoy = (clientX, clientY) => {
+          const rect = joyZone.getBoundingClientRect();
+          const dx = clientX - (rect.left + 56), dy = clientY - (rect.top + 56);
+          const maxR = 34, dist = Math.min(Math.hypot(dx, dy), maxR), ang = Math.atan2(dy, dx);
+          const kx = Math.cos(ang) * dist, ky = Math.sin(ang) * dist;
+          joyKnob.style.transform = `translate(${kx}px, ${ky}px)`;
+          this.joystickVec = { x: (kx + ky) / maxR, y: (ky - kx) / maxR };
+          this.moveTarget = null;
+          this.targetMarker.setVisible(false);
+        };
+        joyZone.addEventListener('pointerdown', e => { joyActive = true; updateJoy(e.clientX, e.clientY); });
+        window.addEventListener('pointermove', e => { if (joyActive) updateJoy(e.clientX, e.clientY); });
+        window.addEventListener('pointerup', () => { joyActive = false; joyKnob.style.transform = 'translate(0px,0px)'; this.joystickVec = { x: 0, y: 0 }; });
+
+        document.querySelectorAll('#mode-group .hud-btn').forEach(btn => btn.addEventListener('click', () => {
+          document.querySelectorAll('#mode-group .hud-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          this.combatMode = btn.dataset.mode;
+          const leader = this.squad[this.leaderIndex];
+          this.autoAnchor = { x: leader.wx, y: leader.wy };
+          this.spawnFloatingText(leader.wx, leader.wy, `MODE: ${this.combatMode}`, '#63b3ed');
+        }));
+
+        document.querySelectorAll('#form-group .hud-btn[data-form]').forEach(btn => btn.addEventListener('click', () => {
+          document.querySelectorAll('#form-group .hud-btn[data-form]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          this.formation = btn.dataset.form;
+        }));
+
+        document.getElementById('btn-potion').addEventListener('click', () => this.useSquadPotion());
+        document.getElementById('btn-portal').addEventListener('click', () => {
+          const leader = this.squad[this.leaderIndex];
+          const inTown = leader.wx < 13 && leader.wy < 13;
+          const dest = inTown ? { x: 16, y: 16 } : { x: 7, y: 7 };
+          this.squad.forEach((m, i) => { m.wx = dest.x + (i - 1) * 0.8; m.wy = dest.y + (i - 1) * 0.5; m.targetEnemyId = null; });
+          this.autoAnchor = { x: dest.x, y: dest.y };
+          this.moveTarget = null;
+          this.spawnFloatingText(dest.x, dest.y, inTown ? 'Entered Whispering Plains!' : 'Returned to Havenfall Town!', '#a855f7');
+        });
+        document.getElementById('btn-attack').addEventListener('click', () => {
+          const leader = this.squad[this.leaderIndex];
+          const nearest = this.findBestTargetFor(leader, 8);
+          if (nearest) {
+            this.squad.forEach(m => m.targetEnemyId = nearest.id);
+            if (this.combatMode === 'MANUAL') this.moveTarget = { x: nearest.wx, y: nearest.wy };
+          }
+        });
+        [0, 1, 2].forEach(idx => document.getElementById(`btn-skill-${idx}`).addEventListener('click', () => this.triggerCharacterSkill(this.squad[idx], performance.now())));
+
+        const modal = document.getElementById('modal-overlay');
+        document.getElementById('btn-inv').addEventListener('click', () => {
+          const el = document.getElementById('inv-list');
+          el.innerHTML = this.squad.map(m => `<div><b>${m.cfg.name} (Lv${m.level})</b> — ATK: ${m.atk} | DEF: ${m.def}</div>`).join('') + '<hr style="margin:5px 0;"/><ul>' + this.inventory.map(i => `<li>${i}</li>`).join('') + '</ul>';
+          modal.style.display = modal.style.display === 'block' ? 'none' : 'block';
+        });
+        document.getElementById('btn-close-modal').addEventListener('click', () => modal.style.display = 'none');
+      }
+
+      useSquadPotion() {
+        if (this.potions <= 0) return;
+        this.potions--;
+        this.squad.forEach(m => {
+          if (m.animState !== 'DEAD') {
+            m.hp = Math.min(m.maxHp, m.hp + Math.round(m.maxHp * 0.45));
+            m.mp = Math.min(m.maxMp, m.mp + 45);
+            this.spawnFloatingText(m.wx, m.wy, '+HP/MP', '#4ade80');
+          }
+        });
+      }
+
+      findBestTargetFor(member, searchRadius) {
+        const candidates = this.enemies.filter(e => e.deadUntil === null && distWorld({ x: member.wx, y: member.wy }, { x: e.wx, y: e.wy }) <= searchRadius);
+        if (!candidates.length) return null;
+        if (member.cfg.role === 'RANGER') return candidates.sort((a, b) => a.hp - b.hp)[0];
+        return candidates.sort((a, b) => distWorld({ x: member.wx, y: member.wy }, { x: a.wx, y: a.wy }) - distWorld({ x: member.wx, y: member.wy }, { x: b.wx, y: b.wy }))[0];
+      }
+
+      triggerCharacterSkill(member, time) {
+        if (member.animState === 'DEAD' || time < member.skillReadyAt || member.mp < member.cfg.skillMpCost) return;
+        const target = this.enemies.find(e => e.id === member.targetEnemyId && e.deadUntil === null) || this.findBestTargetFor(member, 6.5);
+        if (!target && member.cfg.role !== 'GUARDIAN') return;
+        member.mp -= member.cfg.skillMpCost;
+        member.skillReadyAt = time + member.cfg.skillCooldownMs;
+        if (member.cfg.role === 'GUARDIAN') {
+          member.tauntUntil = time + 4500;
+          this.spawnFloatingText(member.wx, member.wy, '🛡️ AEGIS TAUNT!', '#60a5fa');
+          this.enemies.forEach(e => {
+            if (e.deadUntil === null && distWorld({ x: member.wx, y: member.wy }, { x: e.wx, y: e.wy }) <= 4.5) {
+              e.targetMemberIndex = member.index;
+              this.damageEnemy(e, Math.round(member.atk * 1.2), member.index, '#60a5fa', time);
+            }
+          });
+        } else if (member.cfg.role === 'ARCANIST' && target) {
+          this.spawnFloatingText(target.wx, target.wy, '✨ ARCANE NOVA!', '#c084fc');
+          const iso = worldToIso(target.wx, target.wy);
+          const ring = this.add.circle(iso.x, iso.y, 44, 0xa855f7, 0.35).setDepth(iso.y + 10);
+          this.tweens.add({ targets: ring, scale: 1.5, alpha: 0, duration: 380, onComplete: () => ring.destroy() });
+          this.enemies.forEach(e => {
+            if (e.deadUntil === null && distWorld({ x: target.wx, y: target.wy }, { x: e.wx, y: e.wy }) <= 2.7) {
+              this.damageEnemy(e, Math.round(member.atk * 1.85), member.index, '#c084fc', time);
+            }
+          });
+        } else if (member.cfg.role === 'RANGER' && target) {
+          this.spawnFloatingText(target.wx, target.wy, '🏹 PIERCING CRIT!', '#4ade80');
+          this.damageEnemy(target, Math.round(member.atk * 2.4), member.index, '#4ade80', time);
+        }
+      }
+
+      damageEnemy(enemy, dmg, attackerIdx, color, time) {
+        enemy.hp = Math.max(0, enemy.hp - dmg);
+        if (enemy.targetMemberIndex === null) enemy.targetMemberIndex = attackerIdx;
+        this.spawnFloatingText(enemy.wx, enemy.wy, `-${dmg}`, color);
+        if (enemy.hp <= 0) {
+          enemy.deadUntil = time + 9000;
+          enemy.container.setVisible(false);
+          this.kills++;
+          this.gold += enemy.goldReward;
+          this.squad.forEach(m => {
+            if (m.animState === 'DEAD') return;
+            m.xp += enemy.xpReward;
+            if (m.xp >= m.level * 100) { m.xp = 0; m.level++; m.maxHp += 25; m.atk += 4; m.hp = m.maxHp; this.spawnFloatingText(m.wx, m.wy, `Lv${m.level}!`, '#fde047'); }
+          });
+        }
+      }
+
+      spawnFloatingText(wx, wy, msg, color) {
+        const iso = worldToIso(wx, wy);
+        const txt = this.add.text(iso.x, iso.y - 42, msg, { fontSize: '12px', fontStyle: 'bold', color, stroke: '#000', strokeThickness: 3 }).setOrigin(0.5).setDepth(iso.y + 50);
+        this.tweens.add({ targets: txt, y: iso.y - 68, alpha: 0, duration: 750, onComplete: () => txt.destroy() });
+      }
+
+      stepTowards(unit, tx, ty, dt) {
+        const d = distWorld({ x: unit.wx, y: unit.wy }, { x: tx, y: ty });
+        if (d < 0.05) return;
+        const step = Math.min(d, unit.cfg.moveSpeed * dt);
+        unit.wx = Phaser.Math.Clamp(unit.wx + ((tx - unit.wx) / d) * step, 1, this.mapSize - 2);
+        unit.wy = Phaser.Math.Clamp(unit.wy + ((ty - unit.wy) / d) * step, 1, this.mapSize - 2);
+      }
+
+      update(time, delta) {
+        const dt = delta / 1000, leader = this.squad[this.leaderIndex];
+        const inTown = leader.wx < 13 && leader.wy < 13;
+
+        this.squad.forEach(m => {
+          if (m.animState === 'DEAD') {
+            if (inTown) { m.animState = 'IDLE'; m.hp = m.maxHp * 0.5; m.bodySprite.setAngle(0).setAlpha(1); }
+            return;
+          }
+          m.hp = Math.min(m.maxHp, m.hp + (inTown ? 8 : 2) * dt);
+          m.mp = Math.min(m.maxMp, m.mp + (inTown ? 10 : 3) * dt);
+        });
+
+        this.enemies.forEach(e => {
+          if (e.deadUntil !== null && time >= e.deadUntil) {
+            e.deadUntil = null; e.hp = e.maxHp; e.wx = e.spawnX; e.wy = e.spawnY; e.targetMemberIndex = null; e.container.setVisible(true);
+          }
+        });
+
+        if (this.combatMode === 'FULL_AUTO' && this.potions > 0 && this.squad.some(m => m.animState !== 'DEAD' && m.hp / m.maxHp < 0.38)) {
+          this.useSquadPotion();
+        }
+
+        const joyMag = Math.hypot(this.joystickVec.x, this.joystickVec.y);
+        if (joyMag > 0.1) {
+          const sx = (this.joystickVec.x / joyMag) * leader.cfg.moveSpeed * dt;
+          const sy = (this.joystickVec.y / joyMag) * leader.cfg.moveSpeed * dt;
+          this.squadHeading = { x: sx, y: sy };
+          leader.wx = Phaser.Math.Clamp(leader.wx + sx, 1, this.mapSize - 2);
+          leader.wy = Phaser.Math.Clamp(leader.wy + sy, 1, this.mapSize - 2);
+          leader.animState = 'WALK';
+        } else if (this.moveTarget) {
+          const d = distWorld({ x: leader.wx, y: leader.wy }, this.moveTarget);
+          if (d > 0.25) {
+            this.squadHeading = { x: this.moveTarget.x - leader.wx, y: this.moveTarget.y - leader.wy };
+            this.stepTowards(leader, this.moveTarget.x, this.moveTarget.y, dt);
+            leader.animState = 'WALK';
+          } else {
+            this.moveTarget = null; this.targetMarker.setVisible(false); leader.animState = 'IDLE';
+          }
+        }
+
+        const offsets = getFormationOffsets(this.formation, this.squadHeading);
+        this.squad.forEach((m, idx) => {
+          if (m.animState === 'DEAD') return;
+          let target = this.enemies.find(e => e.id === m.targetEnemyId && e.deadUntil === null) || null;
+          if (!target && this.combatMode !== 'MANUAL') {
+            target = this.findBestTargetFor(m, this.combatMode === 'HOLD' ? m.cfg.attackRange + 0.5 : 9.5);
+            if (target) m.targetEnemyId = target.id;
+          }
+          if (target) {
+            const distE = distWorld({ x: m.wx, y: m.wy }, { x: target.wx, y: target.wy });
+            if (distE <= m.cfg.attackRange) {
+              m.aiState = 'ATTACK'; m.animState = 'ATTACK';
+              if (this.combatMode === 'FULL_AUTO' && time >= m.skillReadyAt && m.mp >= m.cfg.skillMpCost) {
+                this.triggerCharacterSkill(m, time);
+              } else if (time - m.lastAttackTime >= m.cfg.attackSpeedMs) {
+                m.lastAttackTime = time;
+                const p1 = worldToIso(m.wx, m.wy), p2 = worldToIso(target.wx, target.wy);
+                const line = this.add.line(0, 0, p1.x, p1.y - 16, p2.x, p2.y - 12, m.cfg.color, 0.9).setOrigin(0, 0).setLineWidth(2.5).setDepth(p2.y + 15);
+                this.tweens.add({ targets: line, alpha: 0, duration: 180, onComplete: () => line.destroy() });
+                this.damageEnemy(target, Math.max(4, m.atk - target.def), m.index, '#ffffff', time);
+              }
+            } else if (this.combatMode !== 'HOLD' && !(idx === this.leaderIndex && (joyMag > 0.1 || this.moveTarget))) {
+              m.aiState = 'CHASE'; m.animState = 'WALK';
+              this.stepTowards(m, target.wx, target.wy, dt);
+            }
+          } else if (idx !== this.leaderIndex && this.combatMode !== 'HOLD') {
+            const off = offsets[idx === 0 ? 1 : idx] || { x: 0, y: 0 };
+            if (distWorld({ x: m.wx, y: m.wy }, { x: leader.wx + off.x, y: leader.wy + off.y }) > 0.35) {
+              m.aiState = 'FOLLOW'; m.animState = 'WALK';
+              this.stepTowards(m, leader.wx + off.x, leader.wy + off.y, dt);
+            } else { m.aiState = 'IDLE'; m.animState = 'IDLE'; }
+          }
+          const iso = worldToIso(m.wx, m.wy);
+          m.container.setPosition(iso.x, iso.y).setDepth(iso.y);
+          m.hpBarFill.width = 30 * (m.hp / m.maxHp);
+          m.bodySprite.y = m.animState === 'WALK' ? -14 + Math.sin(time * 0.015 + m.index) * 2.5 : -14;
+        });
+
+        this.enemies.forEach(e => {
+          if (e.deadUntil !== null) return;
+          if (e.targetMemberIndex === null || this.squad[e.targetMemberIndex].animState === 'DEAD') {
+            const near = this.squad.find(m => m.animState !== 'DEAD' && distWorld({ x: m.wx, y: m.wy }, { x: e.wx, y: e.wy }) < 4.2);
+            e.targetMemberIndex = near ? near.index : null;
+          }
+          if (e.targetMemberIndex !== null) {
+            const t = this.squad[e.targetMemberIndex];
+            if (t.wx < 13 && t.wy < 13) { e.targetMemberIndex = null; return; }
+            const d = distWorld({ x: e.wx, y: e.wy }, { x: t.wx, y: t.wy });
+            if (d <= e.range && time - e.lastAttackTime >= 1350) {
+              e.lastAttackTime = time;
+              const dmg = Math.max(2, e.atk - t.def);
+              t.hp = Math.max(0, t.hp - dmg);
+              this.spawnFloatingText(t.wx, t.wy, `-${dmg}`, '#f87171');
+              if (t.hp <= 0) { t.animState = 'DEAD'; t.bodySprite.setAngle(90).setAlpha(0.5); }
+            } else if (d > e.range && d < 8.5) {
+              e.wx += ((t.wx - e.wx) / d) * e.speed * dt;
+              e.wy += ((t.wy - e.wy) / d) * e.speed * dt;
+            }
+          }
+          const iso = worldToIso(e.wx, e.wy);
+          e.container.setPosition(iso.x, iso.y).setDepth(iso.y);
+          e.hpBarFill.width = 28 * (e.hp / e.maxHp);
+        });
+
+        document.getElementById('zone-banner').textContent = inTown ? '🏰 Havenfall Town (Safe Zone)' : '⚔️ Whispering Plains (Hunting Grounds)';
+        this.squad.forEach((m, i) => {
+          document.getElementById(`hp-bar-${i}`).style.width = `${(m.hp / m.maxHp) * 100}%`;
+          document.getElementById(`mp-bar-${i}`).style.width = `${(m.mp / m.maxMp) * 100}%`;
+          document.getElementById(`state-${i}`).textContent = m.animState === 'DEAD' ? 'DEAD' : m.aiState;
+          document.getElementById(`lvl-${i}`).textContent = `Lv${m.level}`;
+          const cdEl = document.getElementById(`sk-cd-${i}`), rem = Math.max(0, m.skillReadyAt - time);
+          cdEl.style.display = rem > 0 ? 'flex' : 'none';
+          if (rem > 0) cdEl.textContent = (rem / 1000).toFixed(1);
+        });
+        document.getElementById('quest-prog').textContent = `${Math.min(8, this.kills)}/8`;
+        document.getElementById('gold-val').textContent = `${this.gold}`;
+        document.getElementById('pot-val').textContent = `${this.potions}`;
+
+        const canvas = document.getElementById('minimap-canvas'), ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#14261c'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = '#3b4252'; ctx.fillRect(0, 0, (13 / this.mapSize) * canvas.width, (13 / this.mapSize) * canvas.height);
+          ctx.fillStyle = '#ef4444';
+          this.enemies.forEach(e => { if (e.deadUntil === null) ctx.fillRect((e.wx / this.mapSize) * canvas.width - 1.5, (e.wy / this.mapSize) * canvas.height - 1.5, 3, 3); });
+          this.squad.forEach((m, idx) => {
+            ctx.fillStyle = idx === this.leaderIndex ? '#facc15' : '#38bdf8';
+            ctx.fillRect((m.wx / this.mapSize) * canvas.width - 2, (m.wy / this.mapSize) * canvas.height - 2, 4, 4);
+          });
+        }
+      }
+    }
+
+    new Phaser.Game({
+      type: Phaser.AUTO,
+      parent: 'game-container',
+      width: window.innerWidth,
+      height: window.innerHeight,
+      backgroundColor: '#0c0f17',
+      pixelArt: true,
+      scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
+      scene: [MainScene]
+    });
+  </script>
+</body>
+</html>
